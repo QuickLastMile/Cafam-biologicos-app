@@ -1,0 +1,15 @@
+# credenciales / secretos
+*.env
+.env
+credenciales*.json
+service-account*.json
+client_secret*.json
+
+# sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# temporales
+*.log
+*.tmp

@@ -1,0 +1,180 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generador de IDs · Cafam Biológicos</title>
+<style>
+  :root{
+    --bg:#0f172a; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+    --brand:#e30613; --brand2:#0057b8; --line:#e2e8f0; --ok:#16a34a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:#f1f5f9}
+  header{background:linear-gradient(120deg,var(--brand2),#003c80);color:#fff;padding:22px 20px}
+  header h1{margin:0;font-size:20px}
+  header p{margin:4px 0 0;opacity:.85;font-size:13px}
+  .wrap{max-width:1080px;margin:0 auto;padding:20px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:18px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.03em}
+  input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;font-size:15px}
+  .check{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .check input{width:auto}
+  .check label{margin:0;text-transform:none;font-size:14px;color:var(--ink);font-weight:500}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+  button{cursor:pointer;border:0;border-radius:9px;padding:11px 16px;font-size:14px;font-weight:600}
+  .primary{background:var(--brand);color:#fff}
+  .ghost{background:#fff;color:var(--brand2);border:1px solid var(--brand2)}
+  .muted-btn{background:#e2e8f0;color:#334155}
+  small.hint{color:var(--muted);display:block;margin-top:5px;font-size:12px}
+  #status{font-size:13px;color:var(--ok);font-weight:600;margin-left:6px}
+  /* etiquetas */
+  #labels{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-top:10px}
+  .label{border:1px dashed #94a3b8;border-radius:10px;padding:12px;text-align:center;background:#fff;break-inside:avoid}
+  .label .qr{display:flex;justify-content:center;margin-bottom:8px}
+  .label .id{font-family:ui-monospace,Consolas,monospace;font-weight:700;font-size:15px;letter-spacing:.02em}
+  .label .tipo{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+  .label .brandtag{font-size:10px;color:var(--brand2);font-weight:700;margin-top:6px}
+  @media print{
+    header,.panel.controls,.row.actions,#status{display:none!important}
+    body{background:#fff}
+    .wrap{max-width:none;padding:0}
+    #labels{grid-template-columns:repeat(4,1fr);gap:6px}
+    .label{border:1px solid #000}
+  }
+</style>
+
+<header>
+  <h1>Generador de IDs y QR · Cafam Biológicos</h1>
+  <p>Neveras · Maletas · Kits antiderrames — imprime y pega. Cada QR abre la app apuntando a ese activo.</p>
+</header>
+
+<div class="wrap">
+  <div class="panel controls">
+    <div class="grid">
+      <div>
+        <label>Prefijo cliente</label>
+        <input id="prefijo" value="CAF" maxlength="6">
+        <small class="hint">Ej: CAF (Cafam). Evita cruces si marcas otro cliente.</small>
+      </div>
+      <div>
+        <label>Tipo de activo</label>
+        <select id="tipo">
+          <option value="NEV|Nevera">NEV — Nevera</option>
+          <option value="MAL|Maleta">MAL — Maleta</option>
+          <option value="KIT|Kit Antiderrames">KIT — Kit antiderrames</option>
+        </select>
+      </div>
+      <div>
+        <label>Cantidad</label>
+        <input id="cantidad" type="number" value="11" min="1" max="500">
+      </div>
+      <div>
+        <label>Consecutivo inicial</label>
+        <input id="inicio" type="number" value="1" min="1">
+        <small class="hint">Se rellena a 3 dígitos: 001, 002…</small>
+      </div>
+      <div>
+        <label>Deep-link base (app)</label>
+        <input id="base" value="https://TU-USUARIO.github.io/cafam-biologicos-app/?id=">
+        <small class="hint">El QR = base + ID. Ajústalo cuando despliegues en Pages.</small>
+      </div>
+      <div>
+        <label>Opciones del ID</label>
+        <div class="check"><input type="checkbox" id="chkAnio"><label for="chkAnio">Incluir año (CAF-NEV-26-001)</label></div>
+        <div class="check"><input type="checkbox" id="chkDV" checked><label for="chkDV">Dígito verificador (evita errores al teclear)</label></div>
+      </div>
+    </div>
+    <div class="row actions">
+      <button class="primary" onclick="generar()">Generar</button>
+      <button class="ghost" onclick="window.print()">🖨️ Imprimir etiquetas</button>
+      <button class="muted-btn" onclick="copiarMaestro()">📋 Copiar filas para Maestro_Activos</button>
+      <span id="status"></span>
+    </div>
+    <small class="hint">Consejo: imprime en etiquetas de <b>vinilo/poliéster</b> (resisten alcohol y agua del lavado diario). El papel se borra.</small>
+  </div>
+
+  <div id="labels"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  let ultimoLote = [];
+
+  function luhn(numStr){
+    let sum=0, alt=false;
+    for(let i=numStr.length-1;i>=0;i--){
+      let d=parseInt(numStr[i],10);
+      if(alt){ d*=2; if(d>9) d-=9; }
+      sum+=d; alt=!alt;
+    }
+    return (10-(sum%10))%10;
+  }
+
+  function construirId(prefijo, tipoCod, anio2, consec, usarAnio, usarDV){
+    const consecStr = String(consec).padStart(3,'0');
+    let partes = [prefijo, tipoCod];
+    if(usarAnio) partes.push(anio2);
+    partes.push(consecStr);
+    let core = partes.join('-');
+    if(usarDV){
+      const digitos = (usarAnio ? anio2 : '') + consecStr;
+      core += '-' + luhn(digitos);
+    }
+    return core;
+  }
+
+  function generar(){
+    const prefijo = document.getElementById('prefijo').value.trim().toUpperCase() || 'CAF';
+    const [tipoCod, tipoNom] = document.getElementById('tipo').value.split('|');
+    const cantidad = parseInt(document.getElementById('cantidad').value,10) || 1;
+    const inicio = parseInt(document.getElementById('inicio').value,10) || 1;
+    const base = document.getElementById('base').value.trim();
+    const usarAnio = document.getElementById('chkAnio').checked;
+    const usarDV = document.getElementById('chkDV').checked;
+    // Año fijo (sin Date.now dinámico para reproducibilidad): editable manualmente en el ID si hace falta
+    const anio2 = '26';
+
+    const cont = document.getElementById('labels');
+    cont.innerHTML = '';
+    ultimoLote = [];
+
+    for(let i=0;i<cantidad;i++){
+      const consec = inicio + i;
+      const id = construirId(prefijo, tipoCod, anio2, consec, usarAnio, usarDV);
+      ultimoLote.push({id, tipo:tipoNom});
+
+      const card = document.createElement('div');
+      card.className = 'label';
+      const qrBox = document.createElement('div');
+      qrBox.className = 'qr';
+      card.appendChild(qrBox);
+
+      const idEl = document.createElement('div'); idEl.className='id'; idEl.textContent = id;
+      const tipoEl = document.createElement('div'); tipoEl.className='tipo'; tipoEl.textContent = tipoNom;
+      const brand = document.createElement('div'); brand.className='brandtag'; brand.textContent = 'QUICK · CAFAM';
+      card.appendChild(idEl); card.appendChild(tipoEl); card.appendChild(brand);
+      cont.appendChild(card);
+
+      if(window.QRCode){
+        new QRCode(qrBox, { text: base + encodeURIComponent(id), width:118, height:118, correctLevel: QRCode.CorrectLevel.M });
+      } else {
+        qrBox.textContent = '[QR requiere internet]';
+      }
+    }
+    document.getElementById('status').textContent = cantidad + ' etiquetas generadas ✓';
+  }
+
+  function copiarMaestro(){
+    if(!ultimoLote.length){ generar(); }
+    // Encabezados de la hoja Maestro_Activos
+    const filas = ultimoLote.map(x => [x.id, x.tipo, '', 'Activo', '', ''].join('\t'));
+    const tsv = filas.join('\n');
+    navigator.clipboard.writeText(tsv).then(()=>{
+      document.getElementById('status').textContent = ultimoLote.length + ' filas copiadas — pégalas en Maestro_Activos (desde la columna ID) ✓';
+    }).catch(()=>{
+      document.getElementById('status').textContent = 'No se pudo copiar automáticamente. Revisa permisos del navegador.';
+    });
+  }
+
+  // genera un ejemplo al abrir
+  window.addEventListener('load', generar);
+</script>
