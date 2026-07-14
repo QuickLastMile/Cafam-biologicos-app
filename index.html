@@ -1,0 +1,48 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick · Cafam Biológicos</title>
+<style>
+  :root{--brand:#e30613;--brand2:#0057b8;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+       color:var(--ink);background:linear-gradient(160deg,#f1f5f9,#e2e8f0);display:flex;flex-direction:column}
+  header{background:linear-gradient(120deg,var(--brand2),#003c80);color:#fff;padding:26px 20px;text-align:center}
+  header h1{margin:0;font-size:22px;letter-spacing:.02em}
+  header p{margin:6px 0 0;opacity:.9;font-size:14px}
+  main{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;max-width:760px;width:100%}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px;text-decoration:none;color:inherit;
+        box-shadow:0 6px 20px rgba(15,23,42,.06);transition:transform .12s,box-shadow .12s;display:block}
+  .card:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(15,23,42,.12)}
+  .card .ico{font-size:34px}
+  .card h2{margin:10px 0 6px;font-size:18px}
+  .card p{margin:0;color:var(--muted);font-size:14px;line-height:1.5}
+  .badge{display:inline-block;margin-top:12px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px}
+  .badge.pronto{background:#fef3c7;color:#92400e}
+  .badge.listo{background:#dcfce7;color:#166534}
+  footer{text-align:center;padding:16px;color:var(--muted);font-size:12px}
+</style>
+
+<header>
+  <h1>Quick · Cafam Biológicos</h1>
+  <p>Registro operativo: ingreso, protocolos HSQ y lavado de neveras</p>
+</header>
+
+<main>
+  <div class="cards">
+    <a class="card" href="app.html">
+      <div class="ico">🛵</div>
+      <h2>Soy mensajero</h2>
+      <p>Marca ingreso con foto, completa preoperacional y limpieza, y cierra turno con el lavado de nevera.</p>
+      <span class="badge pronto">En construcción</span>
+    </a>
+    <a class="card" href="generador-ids.html">
+      <div class="ico">🏷️</div>
+      <h2>Administración · IDs y QR</h2>
+      <p>Genera los códigos de neveras, maletas y kits antiderrames para imprimir y pegar.</p>
+      <span class="badge listo">Disponible</span>
+    </a>
+  </div>
+</main>
+
+<footer>Quick Last Mile — Operación Cafam Biológicos</footer>

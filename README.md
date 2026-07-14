@@ -12,9 +12,12 @@ App web (HTML) para el control operativo del servicio de Quick a **Cafam Biológ
 
 | Archivo | Estado | Descripción |
 |---|---|---|
+| `index.html` | ✅ Listo | Portal de entrada (mensajero / administración). |
 | `generador-ids.html` | ✅ Listo | Genera IDs (`CAF-NEV-001`) + QR imprimibles y filas para `Maestro_Activos`. |
-| `index.html` | 🚧 En construcción | App del mensajero: login por cédula, ingreso con foto+GPS, forms HSQ, lavado nevera, cierre de turno. |
+| `app.html` | 🚧 En construcción | App del mensajero: login por cédula, ingreso con foto+GPS, forms HSQ, lavado nevera, cierre de turno. |
 | `apps-script/Codigo.gs` | 🚧 En construcción | Backend (Web App) que escribe en Google Sheets y valida la malla. |
+
+**Repo:** https://github.com/QuickLastMile/Cafam-biologicos-app · **Pages:** https://quicklastmile.github.io/Cafam-biologicos-app/
 
 ## Modelo de datos (mismo archivo de la malla)
 Spreadsheet: `1eN-hVBLrAoTZH3m5c0ZLTyTKjhzS8lbfqDq9FD0X2lE`
