@@ -25,7 +25,8 @@ const H = {
   Lavado_Neveras:   ['FechaHora','Fecha','Cedula','Nombre','NeveraID','TipoLavado','FotoURL'],
   Cumplimiento_HSQ: ['FechaHora','Fecha','Cedula','Nombre','Formulario','Metodo','Codigo'],
   Alertas:          ['FechaHora','Fecha','Cedula','Nombre','Tipo','Detalle','Estado'],
-  Cierres:          ['FechaHora','Fecha','Cedula','Nombre','Resultado']
+  Cierres:          ['FechaHora','Fecha','Cedula','Nombre','Turno','HoraIngreso','HoraSalida','Resultado'],
+  Config:           ['Clave','Valor','Descripcion']
 };
 
 /* ================= Enrutamiento ================= */
@@ -62,7 +63,15 @@ function login_(req) {
   if (!cedula) return { ok: false, error: 'Ingresa tu cédula.' };
   const c = lookupCourier_(cedula);
   if (!c) return { ok: false, error: 'Tu cédula no está en la malla de hoy. Avisa al coordinador.' };
-  return { ok: true, courier: c };
+  const cfg = getConfig_();
+  return {
+    ok: true,
+    courier: c,
+    config: {
+      preoperacional: cfg.HSQ_PREOPERACIONAL_URL || '',
+      limpieza_moto:  cfg.HSQ_LIMPIEZA_MOTO_URL || ''
+    }
+  };
 }
 
 function ingreso_(req) {
@@ -78,13 +87,19 @@ function ingreso_(req) {
     estado = (minDif > GRACE_MIN) ? 'TARDE' : 'A tiempo';
   }
 
-  const direccion = reverseGeocode_(req.lat, req.lng);
+  // Prefiere la dirección calculada en el cliente (la misma de la marca de agua).
+  const direccion = (req.direccion && String(req.direccion).trim()) || reverseGeocode_(req.lat, req.lng);
   const fotoURL = saveFoto_(req.foto, 'ingreso_' + cedula);
 
   append_('Ingresos', [
     nowStr_(), today_(), cedula, c.nombre, c.placa, hor ? hor.str : '',
     estado, minDif, req.lat || '', req.lng || '', direccion, fotoURL
   ]);
+
+  // Estado del turno en la hoja Cierres: pasa a "En turno" con hora de ingreso.
+  upsertCierre_(cedula, c.nombre, today_(), {
+    Turno: c.horario, HoraIngreso: nowHora_(), Resultado: 'En turno'
+  });
 
   if (estado === 'TARDE') {
     append_('Alertas', [
@@ -138,7 +153,7 @@ function cerrar_(req) {
     ]);
     return { ok: false, faltantes: faltantes };
   }
-  append_('Cierres', [nowStr_(), hoy, cedula, c.nombre, 'Completo']);
+  upsertCierre_(cedula, c.nombre, hoy, { HoraSalida: nowHora_(), Resultado: 'Completo' });
   return { ok: true };
 }
 
@@ -253,6 +268,70 @@ function activoExiste_(id) {
   return false;
 }
 
+// Lee la hoja Config como objeto { Clave: Valor }.
+function getConfig_() {
+  const sh = ensureSheet_('Config');
+  const vals = sh.getDataRange().getValues();
+  const o = {};
+  for (let r = 1; r < vals.length; r++) {
+    const k = String(vals[r][0]).trim();
+    if (k) o[k] = String(vals[r][1]).trim();
+  }
+  return o;
+}
+
+// Crea o actualiza la fila de estado de turno (una por cédula + fecha) en Cierres.
+// campos: { Turno, HoraIngreso, HoraSalida, Resultado } (solo los que se pasen).
+function upsertCierre_(cedula, nombre, fecha, campos) {
+  const sh = ensureSheet_('Cierres');
+  const idx = { FechaHora:0, Fecha:1, Cedula:2, Nombre:3, Turno:4, HoraIngreso:5, HoraSalida:6, Resultado:7 };
+  const vals = sh.getDataRange().getValues();
+  const objetivo = normFecha_(fecha);
+  let fila = -1;
+  for (let r = 1; r < vals.length; r++) {
+    if (String(vals[r][2]).trim() === String(cedula).trim() && normFecha_(vals[r][1]) === objetivo) { fila = r; break; }
+  }
+  if (fila === -1) {
+    const base = { FechaHora: nowStr_(), Fecha: fecha, Cedula: cedula, Nombre: nombre,
+                   Turno: '', HoraIngreso: '', HoraSalida: '', Resultado: '' };
+    Object.keys(campos || {}).forEach(k => { if (k in base) base[k] = campos[k]; });
+    sh.appendRow([base.FechaHora, base.Fecha, base.Cedula, base.Nombre,
+                  base.Turno, base.HoraIngreso, base.HoraSalida, base.Resultado]);
+  } else {
+    const rowIdx = fila + 1;
+    sh.getRange(rowIdx, idx.FechaHora + 1).setValue(nowStr_());
+    Object.keys(campos || {}).forEach(k => {
+      if (idx[k] != null) sh.getRange(rowIdx, idx[k] + 1).setValue(campos[k]);
+    });
+  }
+}
+
+// Siembra en Cierres una fila "Pendiente" por cada moto CAFAM de la malla de hoy
+// que aún no tenga registro. Correr en la mañana (manual o con activador diario).
+function sembrarPendientesHoy() {
+  const hoy = today_();
+  const m = findMalla_(); const c = m.col;
+  const sh = ensureSheet_('Cierres');
+  const vals = sh.getDataRange().getValues();
+  const yaHay = {};
+  for (let r = 1; r < vals.length; r++) {
+    if (normFecha_(vals[r][1]) === hoy) yaHay[String(vals[r][2]).trim()] = true;
+  }
+  let n = 0;
+  for (let r = m.headerIdx + 1; r < m.values.length; r++) {
+    const row = m.values[r];
+    const cedula = String(row[c.cc] || '').trim();
+    if (!cedula || yaHay[cedula]) continue;
+    const vehiculo = c.vehiculo != null ? String(row[c.vehiculo] || '').toUpperCase() : '';
+    const contrato = c.contrato != null ? String(row[c.contrato] || '').toUpperCase() : '';
+    if (vehiculo.indexOf('MOTO') < 0 || contrato.indexOf('CAFAM') < 0) continue;
+    sh.appendRow([nowStr_(), hoy, cedula, String(row[c.nombre] || '').trim(),
+                  String(row[c.horario] || '').trim(), '', '', 'Pendiente']);
+    n++;
+  }
+  SpreadsheetApp.openById(SS_ID).toast('Sembrados ' + n + ' turnos pendientes de hoy.', 'Cafam Biológicos', 5);
+}
+
 /* ================= Fotos / Geo / Tiempo ================= */
 
 function getFolder_() {
@@ -292,8 +371,9 @@ function parseHorarioInicio_(horario) {
   return { min: h * 60 + mi, str: hh + ':' + m[2] };
 }
 
-function today_()  { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'); }
-function nowStr_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'); }
+function today_()   { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'); }
+function nowStr_()  { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'); }
+function nowHora_() { return Utilities.formatDate(new Date(), TZ, 'HH:mm:ss'); }
 function nowMinutes_() {
   const h = parseInt(Utilities.formatDate(new Date(), TZ, 'HH'), 10);
   const mi = parseInt(Utilities.formatDate(new Date(), TZ, 'mm'), 10);
@@ -303,6 +383,29 @@ function nowMinutes_() {
 /* ================= Setup (ejecutar una vez) ================= */
 function initSheets() {
   Object.keys(H).forEach(ensureSheet_);
+  seedConfig_();
   getFolder_();
-  SpreadsheetApp.openById(SS_ID).toast('Hojas y carpeta de evidencias listas.', 'Cafam Biológicos', 5);
+  SpreadsheetApp.openById(SS_ID).toast('Hojas, config y carpeta de evidencias listas.', 'Cafam Biológicos', 5);
+}
+
+// Siembra los valores por defecto de Config solo si está vacía.
+function seedConfig_() {
+  const sh = ensureSheet_('Config');
+  if (sh.getLastRow() >= 2) return;
+  sh.getRange(2, 1, 4, 3).setValues([
+    ['HSQ_PREOPERACIONAL_URL', 'https://forms.gle/WkcL2o5uYztN7XxR9', 'Link del formulario PREOPERACIONAL (HSQ). Cámbialo aquí cuando HSQ envíe uno nuevo.'],
+    ['HSQ_LIMPIEZA_MOTO_URL',  'https://forms.gle/YeqaDuqV9kNzoEDx5', 'Link del formulario de LIMPIEZA Y DESINFECCIÓN de moto (HSQ). Cámbialo aquí.'],
+    ['RESP_PREOPERACIONAL',    '', '(Opcional) URL o ID de la hoja de respuestas del preoperacional, para cruce automático futuro.'],
+    ['RESP_LIMPIEZA_MOTO',     '', '(Opcional) URL o ID de la hoja de respuestas de limpieza de moto.']
+  ]);
+  sh.autoResizeColumns(1, 3);
+}
+
+// Menú en el Sheet para operar sin abrir el editor.
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Cafam Biológicos')
+    .addItem('Inicializar hojas y config', 'initSheets')
+    .addItem('Sembrar turnos pendientes (hoy)', 'sembrarPendientesHoy')
+    .addToUi();
 }

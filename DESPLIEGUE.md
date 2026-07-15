@@ -34,8 +34,30 @@ Pasos para poner en marcha el backend que alimenta la app del mensajero. Se hace
 1. Genera los IDs en el [generador](https://quicklastmile.github.io/Cafam-biologicos-app/generador-ids.html).
 2. Botón **Copiar filas para Maestro_Activos** → pega en la hoja `Maestro_Activos` (desde la columna ID).
 
+## Cambiar los links de HSQ (cuando envían uno nuevo)
+Los links **no** se tocan en el código. Se cambian en la hoja **`Config`** del mismo Sheet:
+
+| Clave | Valor |
+|---|---|
+| `HSQ_PREOPERACIONAL_URL` | pega aquí el nuevo link del preoperacional |
+| `HSQ_LIMPIEZA_MOTO_URL` | pega aquí el nuevo link de limpieza de moto |
+| `RESP_PREOPERACIONAL` | (opcional) hoja de respuestas, para cruce automático futuro |
+| `RESP_LIMPIEZA_MOTO` | (opcional) hoja de respuestas de limpieza |
+
+Editas la columna **Valor** y listo — la app toma el link nuevo en el siguiente inicio de sesión. No hay que volver a implementar.
+
+## Estado de turnos (hoja `Cierres`)
+Una fila por colaborador y día: `Turno` (horario asignado), `HoraIngreso`, `HoraSalida`, `Resultado`.
+- **Pendiente:** aún no marca ingreso.
+- **En turno:** ya marcó ingreso.
+- **Completo:** cerró turno.
+
+Para que aparezcan los **Pendiente** de las 11 motos CAFAM antes de que marquen, usa el menú
+**Cafam Biológicos → Sembrar turnos pendientes (hoy)** cada mañana (o crea un activador diario:
+Apps Script → Activadores → `sembrarPendientesHoy`, a diario 5–6 a.m.).
+
 ## Notas
-- **Fotos:** se guardan en Drive con enlace de solo lectura; en las hojas queda la URL.
+- **Fotos:** se guardan en Drive con enlace de solo lectura; en las hojas queda la URL. La foto de **ingreso** lleva marca de agua quemada con dirección, fecha/hora y coordenadas.
 - **Puntualidad:** se compara la hora de marcación contra la hora de inicio del `HORARIO` de la malla, con `GRACE_MIN = 5` minutos de tolerancia (ajustable en el `.gs`).
 - **Cambios en el `.gs`:** tras editar, crea una **nueva versión** de la implementación (Implementar → Administrar implementaciones → Editar → Nueva versión).
 - **Verificación HSQ:** hoy queda como confirmación manual (+ código opcional). Cuando HSQ comparta las hojas de respuestas, se puede cambiar a cruce automático por cédula + fecha.

@@ -67,10 +67,13 @@
 
 <script>
 /* ===================== Config ===================== */
+// Links de respaldo. Los reales se leen de la hoja "Config" del Sheet (vía login)
+// para poder cambiarlos sin tocar código cuando HSQ envía un formulario nuevo.
 const HSQ = {
   preoperacional: 'https://forms.gle/WkcL2o5uYztN7XxR9',
   limpieza_moto:  'https://forms.gle/YeqaDuqV9kNzoEDx5'
 };
+function linkHSQ(s, key){ return (s && s.config && s.config[key]) || HSQ[key]; }
 const PASOS = [
   { key:'ingreso',        n:1, titulo:'Marcar ingreso',                sub:'Foto en vivo + ubicación' },
   { key:'preoperacional', n:2, titulo:'Preoperacional',                sub:'Formulario HSQ' },
@@ -163,7 +166,8 @@ async function login(){
     if(!r.ok){ btn.disabled=false; btn.textContent='Iniciar turno'; return showMsg('m',r.error,'err'); }
     setSesion({
       cedula:r.courier.cedula, nombre:r.courier.nombre, placa:r.courier.placa,
-      horario:r.courier.horario, celular:r.courier.celular||'', fecha:hoy(), pasos:{}
+      horario:r.courier.horario, celular:r.courier.celular||'',
+      config:r.config||{}, fecha:hoy(), pasos:{}
     });
     render();
   }catch(e){
@@ -229,9 +233,17 @@ async function pasoIngreso(s){
   try{ foto = await tomarFoto(); }catch(e){ if(e.message==='cancel') return; return alert('No se pudo abrir la cámara. Revisa permisos.'); }
   showToast('Obteniendo ubicación…');
   const pos = await getPos();
+  showToast('Calculando dirección…');
+  const dir = await geocodeCliente(pos);
+  // Marca de agua: dirección + fecha/hora + coordenadas, quemadas en la imagen
+  const lineas = [];
+  if(dir) lineas.push(dir);
+  lineas.push('📅 ' + selloFechaHora());
+  if(pos.lat) lineas.push('📍 ' + pos.lat.toFixed(5) + ', ' + pos.lng.toFixed(5) + (pos.accuracy?(' ±'+pos.accuracy+'m'):''));
+  const fotoMarcada = await marcarAgua(foto, lineas);
   showToast('Enviando marcación…');
   try{
-    const r = await api('ingreso',{cedula:s.cedula, foto, lat:pos.lat, lng:pos.lng, accuracy:pos.accuracy});
+    const r = await api('ingreso',{cedula:s.cedula, foto:fotoMarcada, lat:pos.lat, lng:pos.lng, accuracy:pos.accuracy, direccion:dir});
     if(!r.ok) return alert(r.error||'Error al registrar ingreso');
     s.pasos.ingreso = {estado:r.estado, minutos:r.minutos}; setSesion(s);
     render();
@@ -244,7 +256,7 @@ async function pasoIngreso(s){
 
 /* ---- Paso 2 y 3: HSQ ---- */
 function pasoHSQ(s, key, titulo){
-  const link = HSQ[key];
+  const link = linkHSQ(s, key);
   const app = document.getElementById('app');
   app.innerHTML = `
     <div class="card">
@@ -383,6 +395,54 @@ function getPos(){
       ()=>res({}),
       {enableHighAccuracy:true, timeout:10000, maximumAge:0}
     );
+  });
+}
+
+// Reverse geocoding gratuito en el cliente (sin API key).
+async function geocodeCliente(pos){
+  if(!pos || !pos.lat) return '';
+  try{
+    const u = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${pos.lat}&longitude=${pos.lng}&localityLanguage=es`;
+    const j = await (await fetch(u)).json();
+    const seen = new Set(); const partes = [];
+    [j.locality, j.city, j.principalSubdivision].forEach(p=>{
+      p = (p||'').trim(); if(p && !seen.has(p)){ seen.add(p); partes.push(p); }
+    });
+    return partes.join(', ');
+  }catch(e){ return ''; }
+}
+
+function selloFechaHora(){
+  const d = new Date();
+  const f = d.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const h = d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',hour12:false});
+  return f + ' ' + h;
+}
+
+// Quema una barra con texto (marca de agua) en la parte baja de la foto.
+function marcarAgua(dataUrl, lines){
+  return new Promise(resolve=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const pad = Math.round(c.width * 0.02);
+      let fs = Math.max(13, Math.round(c.width * 0.030));
+      const maxW = c.width - pad*2;
+      ctx.font = `bold ${fs}px Arial, sans-serif`;
+      lines.forEach(ln=>{ while(ctx.measureText(ln).width > maxW && fs > 10){ fs--; ctx.font = `bold ${fs}px Arial, sans-serif`; } });
+      const lh = Math.round(fs * 1.35);
+      const barH = lh * lines.length + pad * 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, c.height - barH, c.width, barH);
+      ctx.fillStyle = '#fff'; ctx.textBaseline = 'top';
+      lines.forEach((ln,i)=> ctx.fillText(ln, pad, c.height - barH + pad + i*lh));
+      resolve(c.toDataURL('image/jpeg', 0.6));
+    };
+    img.onerror = ()=> resolve(dataUrl);
+    img.src = dataUrl;
   });
 }
 
