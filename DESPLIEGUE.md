@@ -56,19 +56,25 @@ Para que aparezcan los **Pendiente** de las 11 motos CAFAM antes de que marquen,
 **Cafam Biológicos → Sembrar turnos pendientes (hoy)** cada mañana (o crea un activador diario:
 Apps Script → Activadores → `sembrarPendientesHoy`, a diario 5–6 a.m.).
 
-## Tablero del cliente (Cafam)
-La misma implementación del Web App sirve el tablero (endpoint `?action=dashboard`).
+## Tablero: dos vistas (coordinador y cliente)
+La misma implementación del Web App sirve el tablero (endpoint `?action=dashboard`). **El rol lo decide el token**, así el cliente ni siquiera recibe los datos que no debe ver.
 
-1. Abre https://quicklastmile.github.io/Cafam-biologicos-app/dashboard.html
-2. Pega la URL `/exec` (y un token si lo configuras) → **Entrar**.
-3. Para enviarle un **enlace listo** al cliente, arma la URL con parámetros:
-   `dashboard.html?api=<URL/exec>&token=<token>` — el cliente entra sin configurar nada.
+| Vista | Ve | Token (hoja `Config`) |
+|---|---|---|
+| **Coordinador** | Ingresos, HSQ, Neveras, **Turnos, Alertas** + export | `DASHBOARD_TOKEN` |
+| **Cliente** | Ingresos, HSQ, Neveras + export | `CLIENTE_TOKEN` |
 
-**Proteger el tablero (opcional):** pon una clave en `Config → DASHBOARD_TOKEN`. Vacío = abierto
-(cualquiera con la URL lo ve). Con token, solo entra quien tenga el token.
+1. Pon una clave distinta en `Config → DASHBOARD_TOKEN` y otra en `Config → CLIENTE_TOKEN`.
+2. Enlaces listos (cada quien entra sin configurar nada):
+   - Coordinador: `dashboard.html?api=<URL/exec>&token=<DASHBOARD_TOKEN>`
+   - Cliente: `dashboard.html?api=<URL/exec>&token=<CLIENTE_TOKEN>`
+3. Si dejas **ambos tokens vacíos**, el tablero queda abierto como coordinador (solo para uso interno; no compartas ese link con el cliente).
 
-Muestra: ingresos del día (con foto y estado a tiempo/tarde), estado de cada nevera
-(alcohol diario y exhaustivo cada 8 días, con alerta de vencido), turnos y alertas.
+**Exportar:** botón **⬇ Exportar CSV** descarga todo lo del día visible (con acentos, abre en Excel) para auditorías.
+
+Muestra: ingresos (foto + estado a tiempo/tarde), cumplimiento HSQ (preoperacional y limpieza),
+estado de cada nevera (alcohol diario y exhaustivo cada 8 días, con alerta de vencido) y, solo el coordinador, turnos y alertas.
+Los activos marcados **inactivos** en `Maestro_Activos` (columna Estado ≠ Activo) ya no aparecen.
 
 ## Notas
 - **Cámara:** el **ingreso** usa la cámara **delantera** (selfie, para validar quién marca); el **lavado de nevera** y el escaneo QR usan la **trasera**.

@@ -34,8 +34,9 @@ function doGet(e) {
   try {
     const p = (e && e.parameter) || {};
     if (p.action === 'dashboard') {
-      if (!validToken_(p.token)) return json_({ ok: false, error: 'Token inválido.' });
-      return json_(dashboardData_(p.fecha || today_()));
+      const rol = rolDe_(p.token);
+      if (!rol) return json_({ ok: false, error: 'Token inválido.' });
+      return json_(dashboardData_(p.fecha || today_(), rol));
     }
     return json_({ ok: true, service: 'cafam-biologicos', hora: nowStr_() });
   } catch (err) {
@@ -343,24 +344,36 @@ function sembrarPendientesHoy() {
 
 /* ================= Tablero del cliente (lectura) ================= */
 
-function validToken_(token) {
-  const t = (getConfig_().DASHBOARD_TOKEN || '').trim();
-  if (!t) return true;                       // sin token: tablero abierto (solo con la URL)
-  return String(token || '').trim() === t;
+// Rol según el token: 'coordinador' (todo) o 'cliente' (sin alertas ni turnos).
+// Si no hay tokens configurados, el tablero es abierto como coordinador (uso interno).
+function rolDe_(token) {
+  const cfg = getConfig_();
+  const coord = (cfg.DASHBOARD_TOKEN || '').trim();
+  const cli   = (cfg.CLIENTE_TOKEN || '').trim();
+  token = String(token || '').trim();
+  if (coord && token === coord) return 'coordinador';
+  if (cli && token === cli) return 'cliente';
+  if (!coord && !cli) return 'coordinador';
+  return null;
 }
 
-function dashboardData_(fecha) {
+function dashboardData_(fecha, rol) {
   const f = normFecha_(fecha);
-  return {
+  const out = {
     ok: true,
+    rol: rol,
     fecha: f,
     generado: nowStr_(),
     ingresos: leerHoja_('Ingresos', f),
+    hsq:      leerHoja_('Cumplimiento_HSQ', f),
     lavados:  leerHoja_('Lavado_Neveras', f),
-    turnos:   leerHoja_('Cierres', f),
-    alertas:  leerHoja_('Alertas', f),
     neveras:  estadoNeveras_()
   };
+  if (rol === 'coordinador') {          // el cliente NO recibe estos datos
+    out.turnos  = leerHoja_('Cierres', f);
+    out.alertas = leerHoja_('Alertas', f);
+  }
+  return out;
 }
 
 // Devuelve las filas de una hoja (opcionalmente filtrando por Fecha en la col B) como objetos.
@@ -408,6 +421,8 @@ function estadoNeveras_() {
   for (let r = 1; r < activos.length; r++) {
     const tipo = String(activos[r][1] || '').toLowerCase();
     if (tipo.indexOf('nevera') < 0) continue;
+    const estado = String(activos[r][3] || '').trim().toLowerCase();
+    if (estado && estado !== 'activo') continue;   // omite inactivos / baja
     const id = String(activos[r][0]).trim(); if (!id) continue;
     const l = last[id] || { alcohol: '', exhaustivo: '' };
     const dSinExh = diasEntre_(l.exhaustivo, hoy);
@@ -489,12 +504,13 @@ function initSheets() {
 function seedConfig_() {
   const sh = ensureSheet_('Config');
   if (sh.getLastRow() >= 2) return;
-  sh.getRange(2, 1, 5, 3).setValues([
+  sh.getRange(2, 1, 6, 3).setValues([
     ['HSQ_PREOPERACIONAL_URL', 'https://forms.gle/WkcL2o5uYztN7XxR9', 'Link del formulario PREOPERACIONAL (HSQ). Cámbialo aquí cuando HSQ envíe uno nuevo.'],
     ['HSQ_LIMPIEZA_MOTO_URL',  'https://forms.gle/YeqaDuqV9kNzoEDx5', 'Link del formulario de LIMPIEZA Y DESINFECCIÓN de moto (HSQ). Cámbialo aquí.'],
     ['RESP_PREOPERACIONAL',    '', '(Opcional) URL o ID de la hoja de respuestas del preoperacional, para cruce automático futuro.'],
     ['RESP_LIMPIEZA_MOTO',     '', '(Opcional) URL o ID de la hoja de respuestas de limpieza de moto.'],
-    ['DASHBOARD_TOKEN',        '', '(Opcional) Clave para proteger el tablero del cliente. Vacío = abierto (solo con la URL).']
+    ['DASHBOARD_TOKEN',        '', 'Clave del tablero del COORDINADOR (ve todo). Vacío = tablero abierto como coordinador.'],
+    ['CLIENTE_TOKEN',          '', 'Clave del tablero del CLIENTE (solo ingresos, HSQ y neveras; sin alertas ni turnos).']
   ]);
   sh.autoResizeColumns(1, 3);
 }

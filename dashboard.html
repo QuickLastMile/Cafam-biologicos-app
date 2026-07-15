@@ -49,6 +49,7 @@
   <div class="controls" id="controls" style="display:none">
     <input type="date" id="fecha">
     <button onclick="cargar()">↻ Actualizar</button>
+    <button onclick="exportCSV()">⬇ Exportar CSV</button>
   </div>
 </div>
 
@@ -163,20 +164,23 @@ function render(){
       <div class="kpi ${vencidas?'warn':''}"><div class="v">${vencidas}</div><div class="l">Neveras exhaustivo vencido</div></div>
     </div>`;
 
+  const disponibles = DATA.rol==='cliente' ? ['ingresos','hsq','neveras'] : ['ingresos','hsq','neveras','turnos','alertas'];
+  if(disponibles.indexOf(TAB)<0) TAB='ingresos';
+  const etiquetas = {ingresos:'🛵 Ingresos',hsq:'✅ HSQ',neveras:'🧊 Neveras',turnos:'📋 Turnos',alertas:'⚠️ Alertas'};
   const tabs = `
     <div class="tabs">
-      ${['ingresos','neveras','turnos','alertas'].map(t=>`<button class="${TAB===t?'active':''}" onclick="setTab('${t}')">${
-        {ingresos:'🛵 Ingresos',neveras:'🧊 Neveras',turnos:'📋 Turnos',alertas:'⚠️ Alertas'}[t]
-      }</button>`).join('')}
+      ${disponibles.map(t=>`<button class="${TAB===t?'active':''}" onclick="setTab('${t}')">${etiquetas[t]}</button>`).join('')}
     </div>`;
 
   let body = '';
   if(TAB==='ingresos') body = tablaIngresos(ing);
+  if(TAB==='hsq')      body = tablaHSQ(DATA.hsq||[]);
   if(TAB==='neveras')  body = tablaNeveras(nev, lav);
   if(TAB==='turnos')   body = tablaTurnos(tur);
   if(TAB==='alertas')  body = tablaAlertas(ale);
 
-  document.getElementById('sub').textContent = 'Datos del ' + (DATA.fecha||'') ;
+  document.getElementById('sub').textContent =
+    (DATA.rol==='cliente'?'Vista cliente':'Vista coordinador') + ' · ' + (DATA.fecha||'');
   document.getElementById('root').innerHTML = kpis + tabs + body;
 }
 function setTab(t){ TAB=t; render(); }
@@ -245,5 +249,52 @@ function tablaAlertas(rows){
   return `<div class="card"><h3>Novedades / alertas</h3><table>
     <thead><tr><th>Hora</th><th>Mensajero</th><th>Tipo</th><th>Detalle</th><th>Estado</th></tr></thead>
     <tbody>${tr}</tbody></table></div>`;
+}
+
+const NOM_HSQ = {preoperacional:'Preoperacional', limpieza_moto:'Limpieza y desinfección moto'};
+function tablaHSQ(rows){
+  if(!rows.length) return `<div class="card"><div class="empty">Sin marcaciones de HSQ este día.</div></div>`;
+  const tr = rows.map(x=>`<tr>
+    <td>${esc(horaDe(x.FechaHora))}</td>
+    <td>${esc(x.Nombre)}</td>
+    <td>${esc(NOM_HSQ[x.Formulario]||x.Formulario)}</td>
+    <td>${esc(x.Metodo)}</td>
+    <td>${esc(x.Codigo||'—')}</td>
+  </tr>`).join('');
+  return `<div class="card"><h3>Cumplimiento de formularios HSQ</h3><table>
+    <thead><tr><th>Hora</th><th>Mensajero</th><th>Formulario</th><th>Método</th><th>Código</th></tr></thead>
+    <tbody>${tr}</tbody></table></div>`;
+}
+
+/* ---------- Exportar CSV (para auditorías) ---------- */
+function csvCell(v){ v = String(v==null?'':v); return /[",\r\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function exportCSV(){
+  if(!DATA){ alert('Primero carga los datos.'); return; }
+  const S = [];
+  S.push(['INGRESOS']);
+  S.push(['Mensajero','Placa','Hora','Estado','MinDif','Direccion','FotoURL']);
+  (DATA.ingresos||[]).forEach(x=>S.push([x.Nombre,x.Placa,horaDe(x.FechaHora),x.Estado,x.MinDiferencia,x.Direccion,x.FotoURL]));
+  S.push([]);
+  S.push(['CUMPLIMIENTO HSQ']);
+  S.push(['Hora','Mensajero','Formulario','Metodo','Codigo']);
+  (DATA.hsq||[]).forEach(x=>S.push([horaDe(x.FechaHora),x.Nombre,NOM_HSQ[x.Formulario]||x.Formulario,x.Metodo,x.Codigo]));
+  S.push([]);
+  S.push(['LAVADO DE NEVERAS']);
+  S.push(['Nevera','Mensajero','Tipo','Hora','FotoURL']);
+  (DATA.lavados||[]).forEach(x=>S.push([x.NeveraID,x.Nombre,x.TipoLavado,horaDe(x.FechaHora),x.FotoURL]));
+  S.push([]);
+  S.push(['ESTADO POR NEVERA']);
+  S.push(['Nevera','UltimoAlcohol','UltimoExhaustivo','DiasSinExhaustivo','ExhaustivoVencido']);
+  (DATA.neveras||[]).forEach(n=>S.push([n.id,n.ultimoAlcohol,n.ultimoExhaustivo,n.diasSinExhaustivo,n.exhaustivoVencido?'SI':'NO']));
+  if(DATA.turnos){ S.push([]); S.push(['TURNOS']); S.push(['Mensajero','Turno','Ingreso','Salida','Resultado']);
+    DATA.turnos.forEach(x=>S.push([x.Nombre,x.Turno,x.HoraIngreso,x.HoraSalida,x.Resultado])); }
+  if(DATA.alertas){ S.push([]); S.push(['ALERTAS']); S.push(['Hora','Mensajero','Tipo','Detalle','Estado']);
+    DATA.alertas.forEach(x=>S.push([horaDe(x.FechaHora),x.Nombre,x.Tipo,x.Detalle,x.Estado])); }
+  const csv = '﻿' + S.map(row=>row.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cafam_${DATA.rol||'tablero'}_${DATA.fecha}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
 }
 </script>
