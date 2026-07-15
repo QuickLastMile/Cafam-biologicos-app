@@ -107,7 +107,22 @@ async function cargar(){
   try{
     const url = `${api()}?action=dashboard&fecha=${f}&token=${encodeURIComponent(token())}`;
     const r = await fetch(url);
-    const j = await r.json();
+    const txt = await r.text();
+    let j;
+    try{ j = JSON.parse(txt); }
+    catch(_){
+      root.innerHTML = `<div class="empty" style="text-align:left;max-width:640px;margin:30px auto">
+        <b>El servidor respondió una página, no datos.</b> Casi siempre es el despliegue del Apps Script. Revisa:
+        <ol style="line-height:1.7">
+          <li>La implementación debe estar <b>“Ejecutar como: Yo”</b> y <b>“Acceso: Cualquier usuario”</b>.</li>
+          <li>Tras pegar el código nuevo, crea una <b>Nueva versión</b> (Implementar → Administrar implementaciones → ✏️ → Nueva versión).</li>
+          <li>Abre tu URL <code>/exec</code> directamente en el navegador: debe mostrar texto JSON (<code>{"ok":true...}</code>), no una página de Google.</li>
+          <li>Verifica que la URL termine en <b>/exec</b> (no /dev). Puedes reconfigurarla con el botón de abajo.</li>
+        </ol>
+        <button onclick="localStorage.removeItem('dashApi');location.reload()" style="border:0;background:#0057b8;color:#fff;padding:10px 16px;border-radius:9px;font-weight:700;cursor:pointer">Reconfigurar URL</button>
+      </div>`;
+      return;
+    }
     if(!j.ok){ root.innerHTML = `<div class="empty">${j.error||'Error al cargar'}</div>`; return; }
     DATA = j; render();
   }catch(e){ root.innerHTML = `<div class="empty">Error de conexión: ${e.message}</div>`; }

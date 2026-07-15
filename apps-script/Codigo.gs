@@ -31,12 +31,16 @@ const H = {
 
 /* ================= Enrutamiento ================= */
 function doGet(e) {
-  const p = (e && e.parameter) || {};
-  if (p.action === 'dashboard') {
-    if (!validToken_(p.token)) return json_({ ok: false, error: 'Token inválido.' });
-    return json_(dashboardData_(p.fecha || today_()));
+  try {
+    const p = (e && e.parameter) || {};
+    if (p.action === 'dashboard') {
+      if (!validToken_(p.token)) return json_({ ok: false, error: 'Token inválido.' });
+      return json_(dashboardData_(p.fecha || today_()));
+    }
+    return json_({ ok: true, service: 'cafam-biologicos', hora: nowStr_() });
+  } catch (err) {
+    return json_({ ok: false, error: String(err && err.message || err) });
   }
-  return json_({ ok: true, service: 'cafam-biologicos', hora: nowStr_() });
 }
 
 function doPost(e) {
