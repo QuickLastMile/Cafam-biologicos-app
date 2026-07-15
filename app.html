@@ -1,0 +1,433 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>App Mensajero · Cafam Biológicos</title>
+<style>
+  :root{--brand:#e30613;--brand2:#0057b8;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;
+        --ok:#16a34a;--warn:#d97706;--bad:#dc2626;--bg:#f1f5f9}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  .top{background:linear-gradient(120deg,var(--brand2),#003c80);color:#fff;padding:16px;display:flex;align-items:center;justify-content:space-between}
+  .top h1{margin:0;font-size:16px;font-weight:700}
+  .top small{opacity:.85;font-size:12px;display:block}
+  .top button{background:rgba(255,255,255,.15);border:0;color:#fff;padding:7px 10px;border-radius:8px;font-size:12px;cursor:pointer}
+  .wrap{max-width:520px;margin:0 auto;padding:16px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  label{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px}
+  input,select{width:100%;padding:13px;border:1px solid var(--line);border-radius:10px;font-size:16px}
+  .btn{display:block;width:100%;border:0;border-radius:11px;padding:15px;font-size:16px;font-weight:700;cursor:pointer;margin-top:10px}
+  .btn.primary{background:var(--brand);color:#fff}
+  .btn.b2{background:var(--brand2);color:#fff}
+  .btn.ok{background:var(--ok);color:#fff}
+  .btn.ghost{background:#fff;color:var(--brand2);border:1px solid var(--brand2)}
+  .btn.muted{background:#e2e8f0;color:#334155}
+  .btn:disabled{opacity:.5}
+  .row{display:flex;gap:8px}
+  .row .btn{margin-top:0}
+  .info{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px}
+  .info:last-child{border:0}
+  .info b{color:var(--muted);font-weight:600}
+  .step{display:flex;align-items:center;gap:12px;padding:13px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:#fff;cursor:pointer}
+  .step .n{width:34px;height:34px;border-radius:50%;background:#eef2f7;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--muted);flex:0 0 auto}
+  .step .t{flex:1}
+  .step .t b{display:block;font-size:15px}
+  .step .t span{font-size:12px;color:var(--muted)}
+  .step.done{background:#f0fdf4;border-color:#bbf7d0}
+  .step.done .n{background:var(--ok);color:#fff}
+  .step.locked{opacity:.55}
+  .pill{font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px}
+  .pill.ok{background:#dcfce7;color:#166534}
+  .pill.bad{background:#fee2e2;color:#991b1b}
+  .msg{padding:11px 13px;border-radius:10px;font-size:14px;margin-top:10px;display:none}
+  .msg.show{display:block}
+  .msg.err{background:#fee2e2;color:#991b1b}
+  .msg.good{background:#dcfce7;color:#166534}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5}
+  /* cámara / scanner */
+  .modal{position:fixed;inset:0;background:#000;z-index:50;display:flex;flex-direction:column}
+  .modal video{flex:1;width:100%;object-fit:cover;background:#000}
+  .modal img{flex:1;width:100%;object-fit:contain;background:#000}
+  .modal .bar{display:flex;gap:8px;padding:14px;background:#111}
+  .modal .bar .btn{margin:0;flex:1}
+  .scanhint{position:absolute;top:20px;left:0;right:0;text-align:center;color:#fff;font-weight:700;text-shadow:0 1px 3px #000}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .radio{display:flex;gap:10px;margin-top:8px}
+  .radio label{flex:1;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;cursor:pointer;font-size:13px;text-transform:none;color:var(--ink);font-weight:600;margin:0}
+  .radio input{display:none}
+  .radio input:checked + span{color:var(--brand2)}
+  .radio label:has(input:checked){border-color:var(--brand2);background:#eff6ff}
+</style>
+
+<div class="top">
+  <div><h1>Cafam Biológicos</h1><small id="topSub">App del mensajero</small></div>
+  <button id="topBtn" onclick="topAction()" style="display:none">Salir</button>
+</div>
+<div class="wrap" id="app"></div>
+
+<script>
+/* ===================== Config ===================== */
+const HSQ = {
+  preoperacional: 'https://forms.gle/WkcL2o5uYztN7XxR9',
+  limpieza_moto:  'https://forms.gle/YeqaDuqV9kNzoEDx5'
+};
+const PASOS = [
+  { key:'ingreso',        n:1, titulo:'Marcar ingreso',                sub:'Foto en vivo + ubicación' },
+  { key:'preoperacional', n:2, titulo:'Preoperacional',                sub:'Formulario HSQ' },
+  { key:'limpieza_moto',  n:3, titulo:'Limpieza y desinfección moto',  sub:'Formulario HSQ' },
+  { key:'lavado',         n:4, titulo:'Lavado de nevera',              sub:'Escanea el QR + foto' }
+];
+
+/* ===================== Estado ===================== */
+function hoy(){ return new Date().toLocaleDateString('en-CA'); } // yyyy-mm-dd local
+function getSesion(){
+  try{
+    const s = JSON.parse(localStorage.getItem('sesion')||'null');
+    if(s && s.fecha === hoy()) return s;
+  }catch(e){}
+  return null;
+}
+function setSesion(s){ localStorage.setItem('sesion', JSON.stringify(s)); }
+function limpiarSesion(){ localStorage.removeItem('sesion'); }
+
+let NEVERA_DEEPLINK = new URLSearchParams(location.search).get('id') || '';
+
+/* ===================== API ===================== */
+async function api(action, payload){
+  const url = localStorage.getItem('apiUrl');
+  if(!url) throw new Error('Falta configurar el servidor (⚙).');
+  const res = await fetch(url, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'}, // evita preflight CORS
+    body: JSON.stringify(Object.assign({action}, payload)),
+    redirect:'follow'
+  });
+  return await res.json();
+}
+
+/* ===================== Render principal ===================== */
+function render(){
+  const app = document.getElementById('app');
+  if(!localStorage.getItem('apiUrl')){ renderSetup(app); return; }
+  const s = getSesion();
+  document.getElementById('topBtn').style.display = s ? 'block' : 'none';
+  document.getElementById('topBtn').textContent = 'Salir';
+  if(!s){ renderLogin(app); } else { renderTurno(app, s); }
+}
+function topAction(){ if(confirm('¿Cerrar sesión?')){ limpiarSesion(); render(); } }
+
+/* ===================== Setup servidor ===================== */
+function renderSetup(app){
+  document.getElementById('topSub').textContent = 'Configuración';
+  app.innerHTML = `
+    <div class="card">
+      <label>URL del servidor (Apps Script /exec)</label>
+      <input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec">
+      <button class="btn primary" onclick="guardarApi()">Guardar</button>
+      <div class="hint">Pega la URL de la implementación del Apps Script. Solo se configura una vez por dispositivo.</div>
+      <div id="m" class="msg err"></div>
+    </div>`;
+}
+function guardarApi(){
+  const v = document.getElementById('apiUrl').value.trim();
+  if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(v)){
+    return showMsg('m','Debe terminar en /exec y ser de script.google.com','err');
+  }
+  localStorage.setItem('apiUrl', v);
+  render();
+}
+
+/* ===================== Login ===================== */
+function renderLogin(app){
+  document.getElementById('topSub').textContent = 'Iniciar turno';
+  app.innerHTML = `
+    <div class="card">
+      <label>Cédula</label>
+      <input id="cedula" inputmode="numeric" placeholder="Tu número de cédula">
+      <label style="margin-top:12px">Usuario</label>
+      <input id="usuario" placeholder="Tu usuario">
+      <label style="margin-top:12px">PIN</label>
+      <input id="pin" inputmode="numeric" type="password" placeholder="PIN (lo creas en tu primer ingreso)">
+      <button class="btn primary" id="btnLogin" onclick="login()">Iniciar turno</button>
+      <div id="m" class="msg err"></div>
+      <div class="hint">Primer ingreso: escribe la cédula, elige un usuario y un PIN — quedan guardados para las siguientes veces.</div>
+      <button class="btn muted" style="margin-top:14px" onclick="reconfig()">⚙ Configurar servidor</button>
+    </div>`;
+}
+function reconfig(){ localStorage.removeItem('apiUrl'); render(); }
+
+async function login(){
+  const cedula = val('cedula'), usuario = val('usuario'), pin = val('pin');
+  if(!cedula) return showMsg('m','Ingresa tu cédula','err');
+  const btn = document.getElementById('btnLogin'); btn.disabled=true; btn.innerHTML='<span class="spin"></span> Validando…';
+  try{
+    const r = await api('login',{cedula,usuario,pin});
+    if(!r.ok){ btn.disabled=false; btn.textContent='Iniciar turno'; return showMsg('m',r.error,'err'); }
+    setSesion({
+      cedula:r.courier.cedula, nombre:r.courier.nombre, placa:r.courier.placa,
+      horario:r.courier.horario, fecha:hoy(), pasos:{}
+    });
+    render();
+  }catch(e){
+    btn.disabled=false; btn.textContent='Iniciar turno';
+    showMsg('m','Error de conexión: '+e.message,'err');
+  }
+}
+
+/* ===================== Turno ===================== */
+function renderTurno(app, s){
+  document.getElementById('topSub').textContent = s.nombre || 'Turno de hoy';
+  const stepsHtml = PASOS.map(p=>{
+    const done = !!s.pasos[p.key];
+    const estado = s.pasos[p.key];
+    let pill = '';
+    if(done){
+      if(p.key==='ingreso' && estado && estado.estado){
+        pill = `<span class="pill ${estado.estado==='TARDE'?'bad':'ok'}">${estado.estado}</span>`;
+      } else { pill = `<span class="pill ok">Hecho</span>`; }
+    }
+    return `<div class="step ${done?'done':''}" onclick="abrirPaso('${p.key}')">
+      <div class="n">${done?'✓':p.n}</div>
+      <div class="t"><b>${p.titulo}</b><span>${p.sub}</span></div>
+      ${pill}
+    </div>`;
+  }).join('');
+
+  const completos = PASOS.every(p=>s.pasos[p.key]);
+  app.innerHTML = `
+    <div class="card">
+      <div class="info"><b>Mensajero</b><span>${s.nombre||'-'}</span></div>
+      <div class="info"><b>Placa</b><span>${s.placa||'-'}</span></div>
+      <div class="info"><b>Horario</b><span>${s.horario||'-'}</span></div>
+    </div>
+    <div class="card">
+      ${stepsHtml}
+    </div>
+    <button class="btn ${completos?'ok':'muted'}" id="btnCerrar" onclick="cerrarTurno()">
+      ${completos?'✅ Cerrar turno':'Cerrar turno (faltan pasos)'}
+    </button>
+    <div id="m" class="msg"></div>`;
+
+  // Si entró por deep-link de una nevera, abre el lavado directo
+  if(NEVERA_DEEPLINK && !s.pasos.lavado){
+    const id = NEVERA_DEEPLINK; NEVERA_DEEPLINK='';
+    setTimeout(()=>abrirPaso('lavado', id), 300);
+  }
+}
+
+function abrirPaso(key, prefillNevera){
+  const s = getSesion();
+  if(key==='ingreso')        return pasoIngreso(s);
+  if(key==='preoperacional') return pasoHSQ(s,'preoperacional','Preoperacional');
+  if(key==='limpieza_moto')  return pasoHSQ(s,'limpieza_moto','Limpieza y desinfección de la moto');
+  if(key==='lavado')         return pasoLavado(s, prefillNevera);
+}
+
+/* ---- Paso 1: Ingreso ---- */
+async function pasoIngreso(s){
+  if(s.pasos.ingreso && !confirm('Ya marcaste ingreso hoy. ¿Volver a registrar?')) return;
+  let foto;
+  try{ foto = await tomarFoto(); }catch(e){ if(e.message==='cancel') return; return alert('No se pudo abrir la cámara. Revisa permisos.'); }
+  showToast('Obteniendo ubicación…');
+  const pos = await getPos();
+  showToast('Enviando marcación…');
+  try{
+    const r = await api('ingreso',{cedula:s.cedula, foto, lat:pos.lat, lng:pos.lng, accuracy:pos.accuracy});
+    if(!r.ok) return alert(r.error||'Error al registrar ingreso');
+    s.pasos.ingreso = {estado:r.estado, minutos:r.minutos}; setSesion(s);
+    render();
+    showMsg('m', r.estado==='TARDE'
+      ? `Ingreso registrado — LLEGADA TARDE (${r.minutos} min). Se notificó al coordinador.`
+      : `Ingreso registrado a tiempo ✓ ${r.direccion?('· '+r.direccion):''}`,
+      r.estado==='TARDE'?'err':'good');
+  }catch(e){ alert('Error de conexión: '+e.message); }
+}
+
+/* ---- Paso 2 y 3: HSQ ---- */
+function pasoHSQ(s, key, titulo){
+  const link = HSQ[key];
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="card">
+      <h2 style="margin:0 0 4px">${titulo}</h2>
+      <p class="hint" style="margin-top:0">1) Abre el formulario y diligéncialo completo. 2) Vuelve y confirma.</p>
+      <a class="btn b2" href="${link}" target="_blank" rel="noopener">📋 Abrir formulario HSQ</a>
+      <label style="margin-top:16px">Código de confirmación (si el formulario lo muestra)</label>
+      <input id="codigo" placeholder="Opcional">
+      <button class="btn ok" id="btnHsq" onclick="confirmarHSQ('${key}')">✓ Ya lo diligencié</button>
+      <button class="btn muted" onclick="render()">Volver</button>
+      <div id="m" class="msg err"></div>
+    </div>`;
+  document.getElementById('topBtn').style.display='none';
+}
+async function confirmarHSQ(key){
+  const s = getSesion();
+  const codigo = val('codigo');
+  const btn=document.getElementById('btnHsq'); btn.disabled=true; btn.innerHTML='<span class="spin"></span> Registrando…';
+  try{
+    const r = await api('hsq',{cedula:s.cedula, formulario:key, metodo: codigo?'codigo':'confirmacion', codigo});
+    if(!r.ok){ btn.disabled=false; btn.textContent='✓ Ya lo diligencié'; return showMsg('m',r.error,'err'); }
+    s.pasos[key]=true; setSesion(s); render();
+  }catch(e){ btn.disabled=false; btn.textContent='✓ Ya lo diligencié'; showMsg('m','Error: '+e.message,'err'); }
+}
+
+/* ---- Paso 4: Lavado nevera ---- */
+function pasoLavado(s, prefill){
+  const app = document.getElementById('app');
+  const soportaScan = ('BarcodeDetector' in window);
+  app.innerHTML = `
+    <div class="card">
+      <h2 style="margin:0 0 4px">Lavado de nevera</h2>
+      <label style="margin-top:6px">ID de la nevera</label>
+      <input id="neveraId" placeholder="CAF-NEV-001" value="${prefill||''}">
+      ${soportaScan?'<button class="btn ghost" onclick="escanearNevera()">📷 Escanear QR</button>':'<div class="hint">Escanea el QR de la nevera con la cámara del celular o escribe el ID.</div>'}
+      <label style="margin-top:16px">Tipo de lavado</label>
+      <div class="radio">
+        <label><input type="radio" name="tl" value="alcohol" checked><span>🧴 Alcohol<br><small>(diario)</small></span></label>
+        <label><input type="radio" name="tl" value="exhaustivo"><span>🧽 Exhaustivo<br><small>(cada 8 días)</small></span></label>
+      </div>
+      <button class="btn primary" id="btnLav" onclick="registrarLavado()">📸 Tomar foto y registrar</button>
+      <button class="btn muted" onclick="render()">Volver</button>
+      <div id="m" class="msg err"></div>
+    </div>`;
+  document.getElementById('topBtn').style.display='none';
+}
+async function escanearNevera(){
+  try{
+    const raw = await scanQR();
+    let id = raw;
+    const mm = String(raw).match(/[?&]id=([^&]+)/);
+    if(mm) id = decodeURIComponent(mm[1]);
+    document.getElementById('neveraId').value = id;
+  }catch(e){ if(e.message!=='cancel') alert('No se pudo escanear. Escribe el ID manualmente.'); }
+}
+async function registrarLavado(){
+  const s = getSesion();
+  const neveraId = val('neveraId');
+  if(!neveraId) return showMsg('m','Escanea o escribe el ID de la nevera','err');
+  const tipoLavado = document.querySelector('input[name="tl"]:checked').value;
+  let foto;
+  try{ foto = await tomarFoto(); }catch(e){ if(e.message==='cancel') return; return alert('No se pudo abrir la cámara.'); }
+  const btn=document.getElementById('btnLav'); btn.disabled=true; btn.innerHTML='<span class="spin"></span> Enviando…';
+  try{
+    const r = await api('lavado',{cedula:s.cedula, neveraId, tipoLavado, foto});
+    if(!r.ok){ btn.disabled=false; btn.textContent='📸 Tomar foto y registrar'; return showMsg('m',r.error,'err'); }
+    s.pasos.lavado=true; setSesion(s); render();
+    if(r.encontrada===false) setTimeout(()=>showMsg('m','Registrado, pero el ID no está en el Maestro de Activos. Verifícalo.','err'),200);
+  }catch(e){ btn.disabled=false; btn.textContent='📸 Tomar foto y registrar'; showMsg('m','Error: '+e.message,'err'); }
+}
+
+/* ---- Cierre ---- */
+async function cerrarTurno(){
+  const s = getSesion();
+  const btn=document.getElementById('btnCerrar'); btn.disabled=true; btn.innerHTML='<span class="spin"></span> Verificando…';
+  try{
+    const r = await api('cerrar',{cedula:s.cedula});
+    if(r.ok){
+      showMsg('m','✅ Turno cerrado correctamente. ¡Buen trabajo!','good');
+      btn.className='btn ok'; btn.textContent='Turno cerrado ✓';
+    }else{
+      showMsg('m','No se puede cerrar. Falta: '+(r.faltantes||[]).join(', ')+'. Se notificó al coordinador.','err');
+      btn.disabled=false; btn.textContent='Cerrar turno (faltan pasos)';
+    }
+  }catch(e){ btn.disabled=false; btn.textContent='Cerrar turno'; showMsg('m','Error: '+e.message,'err'); }
+}
+
+/* ===================== Cámara / GPS / QR ===================== */
+function tomarFoto(){
+  return new Promise((resolve,reject)=>{
+    const modal=document.createElement('div'); modal.className='modal';
+    modal.innerHTML=`
+      <video id="cv" autoplay playsinline muted></video>
+      <canvas id="cc" style="display:none"></canvas>
+      <img id="cp" style="display:none"/>
+      <div class="bar">
+        <button id="cap" class="btn primary">📸 Capturar</button>
+        <button id="use" class="btn ok" style="display:none">Usar</button>
+        <button id="ret" class="btn ghost" style="display:none">Repetir</button>
+        <button id="cx" class="btn muted">Cancelar</button>
+      </div>`;
+    document.body.appendChild(modal);
+    const v=modal.querySelector('#cv');
+    let stream, dataUrl=null;
+    const cleanup=()=>{ if(stream) stream.getTracks().forEach(t=>t.stop()); modal.remove(); };
+    navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false})
+      .then(st=>{ stream=st; v.srcObject=st; })
+      .catch(()=>{ modal.remove(); reject(new Error('camera')); });
+    modal.querySelector('#cap').onclick=()=>{
+      const c=modal.querySelector('#cc');
+      const vw=v.videoWidth||800, vh=v.videoHeight||600;
+      const w=Math.min(800,vw), sc=w/vw;
+      c.width=w; c.height=Math.round(vh*sc);
+      c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+      dataUrl=c.toDataURL('image/jpeg',0.55);
+      const p=modal.querySelector('#cp'); p.src=dataUrl; p.style.display='block'; v.style.display='none';
+      modal.querySelector('#cap').style.display='none';
+      modal.querySelector('#use').style.display='block';
+      modal.querySelector('#ret').style.display='block';
+    };
+    modal.querySelector('#ret').onclick=()=>{
+      modal.querySelector('#cp').style.display='none'; v.style.display='block';
+      modal.querySelector('#cap').style.display='block';
+      modal.querySelector('#use').style.display='none'; modal.querySelector('#ret').style.display='none'; dataUrl=null;
+    };
+    modal.querySelector('#use').onclick=()=>{ const d=dataUrl; cleanup(); resolve(d); };
+    modal.querySelector('#cx').onclick=()=>{ cleanup(); reject(new Error('cancel')); };
+  });
+}
+
+function getPos(){
+  return new Promise(res=>{
+    if(!navigator.geolocation) return res({});
+    navigator.geolocation.getCurrentPosition(
+      p=>res({lat:p.coords.latitude, lng:p.coords.longitude, accuracy:Math.round(p.coords.accuracy)}),
+      ()=>res({}),
+      {enableHighAccuracy:true, timeout:10000, maximumAge:0}
+    );
+  });
+}
+
+function scanQR(){
+  return new Promise((resolve,reject)=>{
+    if(!('BarcodeDetector' in window)) return reject(new Error('nosupport'));
+    const det=new BarcodeDetector({formats:['qr_code']});
+    const modal=document.createElement('div'); modal.className='modal';
+    modal.innerHTML=`<div class="scanhint">Apunta al QR de la nevera</div>
+      <video id="sv" autoplay playsinline muted></video>
+      <div class="bar"><button id="sx" class="btn muted">Cancelar</button></div>`;
+    document.body.appendChild(modal);
+    const v=modal.querySelector('#sv');
+    let stream, stop=false;
+    const cleanup=()=>{ stop=true; if(stream) stream.getTracks().forEach(t=>t.stop()); modal.remove(); };
+    navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false})
+      .then(st=>{ stream=st; v.srcObject=st; loop(); })
+      .catch(()=>{ modal.remove(); reject(new Error('camera')); });
+    modal.querySelector('#sx').onclick=()=>{ cleanup(); reject(new Error('cancel')); };
+    async function loop(){
+      if(stop) return;
+      try{
+        const codes=await det.detect(v);
+        if(codes && codes.length){ const val=codes[0].rawValue; cleanup(); return resolve(val); }
+      }catch(e){}
+      requestAnimationFrame(loop);
+    }
+  });
+}
+
+/* ===================== Utilidades UI ===================== */
+function val(id){ const el=document.getElementById(id); return el?el.value.trim():''; }
+function showMsg(id, text, tipo){
+  const m=document.getElementById(id); if(!m) return;
+  m.textContent=text; m.className='msg show '+(tipo==='good'?'good':'err');
+}
+let toastEl;
+function showToast(text){
+  if(!toastEl){ toastEl=document.createElement('div');
+    toastEl.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:20px;font-size:13px;z-index:60';
+    document.body.appendChild(toastEl); }
+  toastEl.textContent=text; toastEl.style.display='block';
+  clearTimeout(toastEl._t); toastEl._t=setTimeout(()=>toastEl.style.display='none',2500);
+}
+
+render();
+</script>
