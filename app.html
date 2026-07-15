@@ -143,29 +143,27 @@ function renderLogin(app){
   app.innerHTML = `
     <div class="card">
       <label>Cédula</label>
-      <input id="cedula" inputmode="numeric" placeholder="Tu número de cédula">
-      <label style="margin-top:12px">Usuario</label>
-      <input id="usuario" placeholder="Tu usuario">
-      <label style="margin-top:12px">PIN</label>
-      <input id="pin" inputmode="numeric" type="password" placeholder="PIN (lo creas en tu primer ingreso)">
+      <input id="cedula" inputmode="numeric" placeholder="Tu número de cédula" autofocus>
       <button class="btn primary" id="btnLogin" onclick="login()">Iniciar turno</button>
       <div id="m" class="msg err"></div>
-      <div class="hint">Primer ingreso: escribe la cédula, elige un usuario y un PIN — quedan guardados para las siguientes veces.</div>
+      <div class="hint">Ingresa con tu cédula. Debes estar en la malla de hoy — tus datos (nombre, celular, placa y turno) se toman de ahí.</div>
       <button class="btn muted" style="margin-top:14px" onclick="reconfig()">⚙ Configurar servidor</button>
     </div>`;
+  const inp = document.getElementById('cedula');
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
 }
 function reconfig(){ localStorage.removeItem('apiUrl'); render(); }
 
 async function login(){
-  const cedula = val('cedula'), usuario = val('usuario'), pin = val('pin');
+  const cedula = val('cedula');
   if(!cedula) return showMsg('m','Ingresa tu cédula','err');
   const btn = document.getElementById('btnLogin'); btn.disabled=true; btn.innerHTML='<span class="spin"></span> Validando…';
   try{
-    const r = await api('login',{cedula,usuario,pin});
+    const r = await api('login',{cedula});
     if(!r.ok){ btn.disabled=false; btn.textContent='Iniciar turno'; return showMsg('m',r.error,'err'); }
     setSesion({
       cedula:r.courier.cedula, nombre:r.courier.nombre, placa:r.courier.placa,
-      horario:r.courier.horario, fecha:hoy(), pasos:{}
+      horario:r.courier.horario, celular:r.courier.celular||'', fecha:hoy(), pasos:{}
     });
     render();
   }catch(e){
@@ -197,6 +195,7 @@ function renderTurno(app, s){
   app.innerHTML = `
     <div class="card">
       <div class="info"><b>Mensajero</b><span>${s.nombre||'-'}</span></div>
+      <div class="info"><b>Celular</b><span>${s.celular||'-'}</span></div>
       <div class="info"><b>Placa</b><span>${s.placa||'-'}</span></div>
       <div class="info"><b>Horario</b><span>${s.horario||'-'}</span></div>
     </div>

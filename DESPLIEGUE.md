@@ -14,7 +14,7 @@ Pasos para poner en marcha el backend que alimenta la app del mensajero. Se hace
 1. En el editor, selecciona la función **`initSheets`** en el menú desplegable.
 2. Clic en **Ejecutar** ▶.
 3. Autoriza los permisos cuando lo pida (Drive + Hojas + Maps para geocodificar).
-   - Crea las hojas: `Usuarios, Ingresos, Maestro_Activos, Lavado_Neveras, Cumplimiento_HSQ, Alertas, Cierres`.
+   - Crea las hojas: `Ingresos, Maestro_Activos, Lavado_Neveras, Cumplimiento_HSQ, Alertas, Cierres`.
    - Crea la carpeta de fotos `Cafam_Biologicos_Evidencias` en tu Drive.
 
 ## 3. Publicar como aplicación web

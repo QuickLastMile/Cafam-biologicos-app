@@ -20,7 +20,6 @@ const FOLDER_NAME = 'Cafam_Biologicos_Evidencias'; // carpeta de fotos en Drive
 
 /* ================= Encabezados de las hojas ================= */
 const H = {
-  Usuarios:         ['Cedula','Usuario','PIN','Activo','FechaAlta'],
   Ingresos:         ['FechaHora','Fecha','Cedula','Nombre','Placa','HorarioInicio','Estado','MinDiferencia','Lat','Lng','Direccion','FotoURL'],
   Maestro_Activos:  ['ID','Tipo','FechaAlta','Estado','SedeBase','Observaciones'],
   Lavado_Neveras:   ['FechaHora','Fecha','Cedula','Nombre','NeveraID','TipoLavado','FotoURL'],
@@ -57,32 +56,13 @@ function json_(obj) {
 
 /* ================= Acciones ================= */
 
-// Primer ingreso registra usuario/PIN; los siguientes validan el PIN.
+// Login solo con cédula: si está en la malla de hoy, entra. Todo lo demás sale de la malla.
 function login_(req) {
   const cedula = String(req.cedula || '').trim();
-  const usuario = String(req.usuario || '').trim();
-  const pin = String(req.pin || '').trim();
   if (!cedula) return { ok: false, error: 'Ingresa tu cédula.' };
-
   const c = lookupCourier_(cedula);
   if (!c) return { ok: false, error: 'Tu cédula no está en la malla de hoy. Avisa al coordinador.' };
-
-  const sh = ensureSheet_('Usuarios');
-  const vals = sh.getDataRange().getValues();
-  let fila = -1;
-  for (let r = 1; r < vals.length; r++) {
-    if (String(vals[r][0]).trim() === cedula) { fila = r; break; }
-  }
-
-  if (fila === -1) {
-    if (!usuario || !pin) return { ok: false, error: 'Primer ingreso: crea tu usuario y PIN.' };
-    sh.appendRow([cedula, usuario, pin, 'SI', today_()]);
-    return { ok: true, courier: c, primerIngreso: true };
-  }
-
-  if (String(vals[fila][3]).trim().toUpperCase() === 'NO') return { ok: false, error: 'Usuario inactivo.' };
-  if (String(vals[fila][2]).trim() !== pin) return { ok: false, error: 'PIN incorrecto.' };
-  return { ok: true, courier: c, primerIngreso: false };
+  return { ok: true, courier: c };
 }
 
 function ingreso_(req) {
@@ -182,6 +162,7 @@ function findMalla_() {
           else if (v.indexOf('HORARIO') >= 0) col.horario = i;
           else if (v.indexOf('CONTRATO') >= 0) col.contrato = i;
           else if (v === 'VEHICULO') col.vehiculo = i;
+          else if (v.indexOf('CELULAR') >= 0 || v.indexOf('CEL') === 0) col.celular = i;
         });
         return { values: values, headerIdx: r, col: col };
       }
@@ -202,6 +183,7 @@ function lookupCourier_(cedula) {
         nombre: String(row[c.nombre] || '').trim(),
         placa: String(row[c.placa] || '').trim(),
         horario: String(row[c.horario] || '').trim(),
+        celular: c.celular != null ? String(row[c.celular] || '').trim() : '',
         contrato: c.contrato != null ? String(row[c.contrato] || '').trim() : '',
         vehiculo: c.vehiculo != null ? String(row[c.vehiculo] || '').trim() : ''
       };
@@ -221,6 +203,9 @@ function ensureSheet_(name) {
     if (headers.length) {
       sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
       sh.setFrozenRows(1);
+      // Columnas A (FechaHora/Cedula/ID) y B (Fecha) como texto: evita que Sheets
+      // convierta "2026-07-15" o la cédula a número/fecha y rompa las comparaciones.
+      sh.getRange('A:B').setNumberFormat('@');
     }
   }
   return sh;
@@ -231,17 +216,32 @@ function append_(name, row) {
 }
 
 // ¿Existe una fila para esta cédula y fecha? (opcionalmente filtrando una columna)
+// Normaliza la fecha porque Sheets suele convertir "2026-07-15" en un valor Date.
 function hayRegistro_(name, cedula, fecha, colIdx, colVal) {
   const sh = ensureSheet_(name);
   const vals = sh.getDataRange().getValues();
+  const objetivo = normFecha_(fecha);
   for (let r = 1; r < vals.length; r++) {
     if (String(vals[r][2]).trim() === String(cedula).trim() &&
-        String(vals[r][1]).trim() === String(fecha).trim()) {
+        normFecha_(vals[r][1]) === objetivo) {
       if (colIdx == null) return true;
       if (String(vals[r][colIdx]).trim() === String(colVal).trim()) return true;
     }
   }
   return false;
+}
+
+// Devuelve 'yyyy-MM-dd' tanto si el valor es Date como si es texto.
+// Para Date usa la zona horaria de la hoja (con la que Sheets creó el valor).
+var _SSTZ = null;
+function ssTz_() {
+  if (!_SSTZ) _SSTZ = SpreadsheetApp.openById(SS_ID).getSpreadsheetTimeZone() || TZ;
+  return _SSTZ;
+}
+function normFecha_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]')
+    return Utilities.formatDate(v, ssTz_(), 'yyyy-MM-dd');
+  return String(v).trim().substring(0, 10);
 }
 
 function activoExiste_(id) {
