@@ -31,6 +31,11 @@ const H = {
 
 /* ================= Enrutamiento ================= */
 function doGet(e) {
+  const p = (e && e.parameter) || {};
+  if (p.action === 'dashboard') {
+    if (!validToken_(p.token)) return json_({ ok: false, error: 'Token inválido.' });
+    return json_(dashboardData_(p.fecha || today_()));
+  }
   return json_({ ok: true, service: 'cafam-biologicos', hora: nowStr_() });
 }
 
@@ -332,6 +337,94 @@ function sembrarPendientesHoy() {
   SpreadsheetApp.openById(SS_ID).toast('Sembrados ' + n + ' turnos pendientes de hoy.', 'Cafam Biológicos', 5);
 }
 
+/* ================= Tablero del cliente (lectura) ================= */
+
+function validToken_(token) {
+  const t = (getConfig_().DASHBOARD_TOKEN || '').trim();
+  if (!t) return true;                       // sin token: tablero abierto (solo con la URL)
+  return String(token || '').trim() === t;
+}
+
+function dashboardData_(fecha) {
+  const f = normFecha_(fecha);
+  return {
+    ok: true,
+    fecha: f,
+    generado: nowStr_(),
+    ingresos: leerHoja_('Ingresos', f),
+    lavados:  leerHoja_('Lavado_Neveras', f),
+    turnos:   leerHoja_('Cierres', f),
+    alertas:  leerHoja_('Alertas', f),
+    neveras:  estadoNeveras_()
+  };
+}
+
+// Devuelve las filas de una hoja (opcionalmente filtrando por Fecha en la col B) como objetos.
+function leerHoja_(name, fecha) {
+  const sh = ensureSheet_(name);
+  const vals = sh.getDataRange().getValues();
+  if (vals.length < 2) return [];
+  const headers = vals[0];
+  const out = [];
+  for (let r = 1; r < vals.length; r++) {
+    if (fecha && normFecha_(vals[r][1]) !== fecha) continue;
+    const o = {};
+    headers.forEach((h, i) => { o[h] = celda_(vals[r][i]); });
+    out.push(o);
+  }
+  return out;
+}
+
+// Convierte celdas Date (fecha/hora que Sheets coacciona) a texto legible.
+function celda_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    if (v.getFullYear() === 1899) return Utilities.formatDate(v, ssTz_(), 'HH:mm:ss');
+    if (v.getHours() === 0 && v.getMinutes() === 0 && v.getSeconds() === 0)
+      return Utilities.formatDate(v, ssTz_(), 'yyyy-MM-dd');
+    return Utilities.formatDate(v, ssTz_(), 'yyyy-MM-dd HH:mm:ss');
+  }
+  return v;
+}
+
+// Estado de cada nevera: último lavado con alcohol y último exhaustivo (cada 8 días).
+function estadoNeveras_() {
+  const activos = ensureSheet_('Maestro_Activos').getDataRange().getValues();
+  const lav = ensureSheet_('Lavado_Neveras').getDataRange().getValues();
+  const last = {}; // id -> { alcohol, exhaustivo } (fechas 'yyyy-MM-dd')
+  for (let r = 1; r < lav.length; r++) {
+    const id = String(lav[r][4]).trim(); if (!id) continue;
+    const f = normFecha_(lav[r][1]);
+    const tipo = String(lav[r][5]).toLowerCase();
+    last[id] = last[id] || { alcohol: '', exhaustivo: '' };
+    if (tipo.indexOf('exhaust') >= 0) { if (f > last[id].exhaustivo) last[id].exhaustivo = f; }
+    else { if (f > last[id].alcohol) last[id].alcohol = f; }
+  }
+  const hoy = today_();
+  const out = [];
+  for (let r = 1; r < activos.length; r++) {
+    const tipo = String(activos[r][1] || '').toLowerCase();
+    if (tipo.indexOf('nevera') < 0) continue;
+    const id = String(activos[r][0]).trim(); if (!id) continue;
+    const l = last[id] || { alcohol: '', exhaustivo: '' };
+    const dSinExh = diasEntre_(l.exhaustivo, hoy);
+    out.push({
+      id: id,
+      ultimoAlcohol: l.alcohol,
+      ultimoExhaustivo: l.exhaustivo,
+      diasSinAlcohol: diasEntre_(l.alcohol, hoy),
+      diasSinExhaustivo: dSinExh,
+      exhaustivoVencido: (l.exhaustivo === '') ? true : (dSinExh > 8)
+    });
+  }
+  return out;
+}
+
+function diasEntre_(f1, f2) {
+  if (!f1) return '';
+  const a = new Date(f1 + 'T00:00:00'), b = new Date(f2 + 'T00:00:00');
+  return Math.round((b - a) / 86400000);
+}
+
 /* ================= Fotos / Geo / Tiempo ================= */
 
 function getFolder_() {
@@ -392,11 +485,12 @@ function initSheets() {
 function seedConfig_() {
   const sh = ensureSheet_('Config');
   if (sh.getLastRow() >= 2) return;
-  sh.getRange(2, 1, 4, 3).setValues([
+  sh.getRange(2, 1, 5, 3).setValues([
     ['HSQ_PREOPERACIONAL_URL', 'https://forms.gle/WkcL2o5uYztN7XxR9', 'Link del formulario PREOPERACIONAL (HSQ). Cámbialo aquí cuando HSQ envíe uno nuevo.'],
     ['HSQ_LIMPIEZA_MOTO_URL',  'https://forms.gle/YeqaDuqV9kNzoEDx5', 'Link del formulario de LIMPIEZA Y DESINFECCIÓN de moto (HSQ). Cámbialo aquí.'],
     ['RESP_PREOPERACIONAL',    '', '(Opcional) URL o ID de la hoja de respuestas del preoperacional, para cruce automático futuro.'],
-    ['RESP_LIMPIEZA_MOTO',     '', '(Opcional) URL o ID de la hoja de respuestas de limpieza de moto.']
+    ['RESP_LIMPIEZA_MOTO',     '', '(Opcional) URL o ID de la hoja de respuestas de limpieza de moto.'],
+    ['DASHBOARD_TOKEN',        '', '(Opcional) Clave para proteger el tablero del cliente. Vacío = abierto (solo con la URL).']
   ]);
   sh.autoResizeColumns(1, 3);
 }

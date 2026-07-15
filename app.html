@@ -230,7 +230,7 @@ function abrirPaso(key, prefillNevera){
 async function pasoIngreso(s){
   if(s.pasos.ingreso && !confirm('Ya marcaste ingreso hoy. ¿Volver a registrar?')) return;
   let foto;
-  try{ foto = await tomarFoto(); }catch(e){ if(e.message==='cancel') return; return alert('No se pudo abrir la cámara. Revisa permisos.'); }
+  try{ foto = await tomarFoto('user'); }catch(e){ if(e.message==='cancel') return; return alert('No se pudo abrir la cámara. Revisa permisos.'); }
   showToast('Obteniendo ubicación…');
   const pos = await getPos();
   showToast('Calculando dirección…');
@@ -318,7 +318,7 @@ async function registrarLavado(){
   if(!neveraId) return showMsg('m','Escanea o escribe el ID de la nevera','err');
   const tipoLavado = document.querySelector('input[name="tl"]:checked').value;
   let foto;
-  try{ foto = await tomarFoto(); }catch(e){ if(e.message==='cancel') return; return alert('No se pudo abrir la cámara.'); }
+  try{ foto = await tomarFoto('environment'); }catch(e){ if(e.message==='cancel') return; return alert('No se pudo abrir la cámara.'); }
   const btn=document.getElementById('btnLav'); btn.disabled=true; btn.innerHTML='<span class="spin"></span> Enviando…';
   try{
     const r = await api('lavado',{cedula:s.cedula, neveraId, tipoLavado, foto});
@@ -345,7 +345,9 @@ async function cerrarTurno(){
 }
 
 /* ===================== Cámara / GPS / QR ===================== */
-function tomarFoto(){
+// facing: 'user' = cámara delantera (selfie) · 'environment' = trasera (por defecto)
+function tomarFoto(facing){
+  facing = facing || 'environment';
   return new Promise((resolve,reject)=>{
     const modal=document.createElement('div'); modal.className='modal';
     modal.innerHTML=`
@@ -362,9 +364,14 @@ function tomarFoto(){
     const v=modal.querySelector('#cv');
     let stream, dataUrl=null;
     const cleanup=()=>{ if(stream) stream.getTracks().forEach(t=>t.stop()); modal.remove(); };
-    navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false})
+    // Fuerza la cámara pedida; si no está disponible, cae a cualquiera.
+    navigator.mediaDevices.getUserMedia({video:{facingMode:{exact:facing}},audio:false})
       .then(st=>{ stream=st; v.srcObject=st; })
-      .catch(()=>{ modal.remove(); reject(new Error('camera')); });
+      .catch(()=> navigator.mediaDevices.getUserMedia({video:{facingMode:facing},audio:false})
+        .then(st=>{ stream=st; v.srcObject=st; })
+        .catch(()=> navigator.mediaDevices.getUserMedia({video:true,audio:false})
+          .then(st=>{ stream=st; v.srcObject=st; })
+          .catch(()=>{ modal.remove(); reject(new Error('camera')); })));
     modal.querySelector('#cap').onclick=()=>{
       const c=modal.querySelector('#cc');
       const vw=v.videoWidth||800, vh=v.videoHeight||600;

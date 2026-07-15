@@ -56,7 +56,22 @@ Para que aparezcan los **Pendiente** de las 11 motos CAFAM antes de que marquen,
 **Cafam Biológicos → Sembrar turnos pendientes (hoy)** cada mañana (o crea un activador diario:
 Apps Script → Activadores → `sembrarPendientesHoy`, a diario 5–6 a.m.).
 
+## Tablero del cliente (Cafam)
+La misma implementación del Web App sirve el tablero (endpoint `?action=dashboard`).
+
+1. Abre https://quicklastmile.github.io/Cafam-biologicos-app/dashboard.html
+2. Pega la URL `/exec` (y un token si lo configuras) → **Entrar**.
+3. Para enviarle un **enlace listo** al cliente, arma la URL con parámetros:
+   `dashboard.html?api=<URL/exec>&token=<token>` — el cliente entra sin configurar nada.
+
+**Proteger el tablero (opcional):** pon una clave en `Config → DASHBOARD_TOKEN`. Vacío = abierto
+(cualquiera con la URL lo ve). Con token, solo entra quien tenga el token.
+
+Muestra: ingresos del día (con foto y estado a tiempo/tarde), estado de cada nevera
+(alcohol diario y exhaustivo cada 8 días, con alerta de vencido), turnos y alertas.
+
 ## Notas
+- **Cámara:** el **ingreso** usa la cámara **delantera** (selfie, para validar quién marca); el **lavado de nevera** y el escaneo QR usan la **trasera**.
 - **Fotos:** se guardan en Drive con enlace de solo lectura; en las hojas queda la URL. La foto de **ingreso** lleva marca de agua quemada con dirección, fecha/hora y coordenadas.
 - **Puntualidad:** se compara la hora de marcación contra la hora de inicio del `HORARIO` de la malla, con `GRACE_MIN = 5` minutos de tolerancia (ajustable en el `.gs`).
 - **Cambios en el `.gs`:** tras editar, crea una **nueva versión** de la implementación (Implementar → Administrar implementaciones → Editar → Nueva versión).

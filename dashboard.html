@@ -1,0 +1,234 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tablero · Cafam Biológicos</title>
+<style>
+  :root{--brand:#e30613;--brand2:#0057b8;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;
+        --bg:#f1f5f9;--ok:#16a34a;--bad:#dc2626;--warn:#d97706}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  .top{background:linear-gradient(120deg,var(--brand2),#003c80);color:#fff;padding:18px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+  .top h1{margin:0;font-size:19px}
+  .top small{opacity:.85;font-size:12px}
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .controls input{padding:9px;border:0;border-radius:8px;font-size:14px}
+  .controls button{border:0;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer;background:#fff;color:var(--brand2)}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}
+  .kpi .v{font-size:30px;font-weight:800;line-height:1}
+  .kpi .l{font-size:12px;color:var(--muted);margin-top:6px;text-transform:uppercase;letter-spacing:.03em}
+  .kpi.bad .v{color:var(--bad)} .kpi.ok .v{color:var(--ok)} .kpi.warn .v{color:var(--warn)}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tabs button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:9px 16px;font-weight:600;cursor:pointer;font-size:14px;color:var(--muted)}
+  .tabs button.active{background:var(--brand2);color:#fff;border-color:var(--brand2)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px;margin-bottom:16px;overflow-x:auto}
+  .card h3{margin:10px 12px;font-size:15px}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  td.dir{white-space:normal;min-width:180px}
+  .badge{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px}
+  .b-ok{background:#dcfce7;color:#166534}
+  .b-bad{background:#fee2e2;color:#991b1b}
+  .b-warn{background:#fef3c7;color:#92400e}
+  .b-mut{background:#e2e8f0;color:#334155}
+  .thumb{width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer;background:#f1f5f9}
+  .empty{padding:22px;text-align:center;color:var(--muted);font-size:14px}
+  .setup{max-width:460px;margin:60px auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px}
+  .setup label{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:12px 0 6px}
+  .setup input{width:100%;padding:11px;border:1px solid var(--line);border-radius:9px;font-size:14px}
+  .setup button{width:100%;margin-top:16px;border:0;background:var(--brand);color:#fff;padding:13px;border-radius:10px;font-weight:700;cursor:pointer}
+  .msg{padding:10px 14px;border-radius:9px;background:#fee2e2;color:#991b1b;font-size:13px;margin:10px 0;display:none}
+  .msg.show{display:block}
+  #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  #lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+</style>
+
+<div class="top">
+  <div><h1>Cafam Biológicos · Tablero</h1><small id="sub">Ingresos y gestión de neveras</small></div>
+  <div class="controls" id="controls" style="display:none">
+    <input type="date" id="fecha">
+    <button onclick="cargar()">↻ Actualizar</button>
+  </div>
+</div>
+
+<div class="wrap" id="root"></div>
+<div id="lightbox" onclick="this.style.display='none'"><img id="lbimg" src=""></div>
+
+<script>
+/* ---------- Config ---------- */
+(function initConfig(){
+  const q = new URLSearchParams(location.search);
+  if(q.get('api'))   localStorage.setItem('dashApi',   q.get('api'));
+  if(q.get('token')!==null) localStorage.setItem('dashToken', q.get('token'));
+  if(q.get('api') || q.get('token')!==null){ history.replaceState({}, '', location.pathname); }
+})();
+function api(){ return localStorage.getItem('dashApi') || ''; }
+function token(){ return localStorage.getItem('dashToken') || ''; }
+
+/* ---------- Arranque ---------- */
+window.addEventListener('load', ()=>{
+  if(!api()){ renderSetup(); return; }
+  document.getElementById('controls').style.display = 'flex';
+  document.getElementById('fecha').value = hoy();
+  cargar();
+});
+function hoy(){ return new Date().toLocaleDateString('en-CA'); }
+
+function renderSetup(){
+  document.getElementById('root').innerHTML = `
+    <div class="setup">
+      <h2 style="margin:0">Configurar tablero</h2>
+      <label>URL del servidor (/exec)</label>
+      <input id="sApi" placeholder="https://script.google.com/macros/s/.../exec">
+      <label>Token (si el tablero está protegido)</label>
+      <input id="sTok" placeholder="Opcional">
+      <button onclick="guardarSetup()">Entrar</button>
+      <div id="m" class="msg"></div>
+    </div>`;
+}
+function guardarSetup(){
+  const a = document.getElementById('sApi').value.trim();
+  if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(a)){
+    const m=document.getElementById('m'); m.textContent='La URL debe terminar en /exec'; m.className='msg show'; return;
+  }
+  localStorage.setItem('dashApi', a);
+  localStorage.setItem('dashToken', document.getElementById('sTok').value.trim());
+  location.reload();
+}
+
+/* ---------- Carga de datos ---------- */
+let DATA = null;
+let TAB = 'ingresos';
+async function cargar(){
+  const root = document.getElementById('root');
+  root.innerHTML = '<div class="empty">Cargando…</div>';
+  const f = document.getElementById('fecha').value || hoy();
+  try{
+    const url = `${api()}?action=dashboard&fecha=${f}&token=${encodeURIComponent(token())}`;
+    const r = await fetch(url);
+    const j = await r.json();
+    if(!j.ok){ root.innerHTML = `<div class="empty">${j.error||'Error al cargar'}</div>`; return; }
+    DATA = j; render();
+  }catch(e){ root.innerHTML = `<div class="empty">Error de conexión: ${e.message}</div>`; }
+}
+
+/* ---------- Render ---------- */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function driveThumb(url){ const m=String(url||'').match(/[-\w]{25,}/); return m?`https://drive.google.com/thumbnail?id=${m[0]}&sz=w400`:''; }
+function fotoCell(url){
+  const t = driveThumb(url);
+  if(!t) return '<td>—</td>';
+  return `<td><img class="thumb" src="${t}" onclick="verFoto('${esc(url)}')" onerror="this.style.display='none'"></td>`;
+}
+function verFoto(url){ const t=driveThumb(url).replace('&sz=w400','&sz=w1200'); document.getElementById('lbimg').src=t; document.getElementById('lightbox').style.display='flex'; }
+function horaDe(fh){ const s=String(fh||''); return s.length>=19 ? s.substring(11,19) : s; }
+function badgeEstado(e){
+  e=String(e||'');
+  if(e==='A tiempo') return `<span class="badge b-ok">A tiempo</span>`;
+  if(e==='TARDE')    return `<span class="badge b-bad">TARDE</span>`;
+  if(e==='Completo') return `<span class="badge b-ok">Completo</span>`;
+  if(e==='En turno') return `<span class="badge b-warn">En turno</span>`;
+  if(e==='Pendiente')return `<span class="badge b-mut">Pendiente</span>`;
+  return `<span class="badge b-mut">${esc(e)}</span>`;
+}
+
+function render(){
+  const ing = DATA.ingresos||[], lav = DATA.lavados||[], tur = DATA.turnos||[], ale = DATA.alertas||[], nev = DATA.neveras||[];
+  const aTiempo = ing.filter(x=>x.Estado==='A tiempo').length;
+  const tarde   = ing.filter(x=>x.Estado==='TARDE').length;
+  const vencidas= nev.filter(x=>x.exhaustivoVencido).length;
+
+  const kpis = `
+    <div class="kpis">
+      <div class="kpi"><div class="v">${ing.length}</div><div class="l">Ingresos del día</div></div>
+      <div class="kpi ok"><div class="v">${aTiempo}</div><div class="l">A tiempo</div></div>
+      <div class="kpi bad"><div class="v">${tarde}</div><div class="l">Tarde</div></div>
+      <div class="kpi"><div class="v">${lav.length}</div><div class="l">Lavados del día</div></div>
+      <div class="kpi ${vencidas?'warn':''}"><div class="v">${vencidas}</div><div class="l">Neveras exhaustivo vencido</div></div>
+    </div>`;
+
+  const tabs = `
+    <div class="tabs">
+      ${['ingresos','neveras','turnos','alertas'].map(t=>`<button class="${TAB===t?'active':''}" onclick="setTab('${t}')">${
+        {ingresos:'🛵 Ingresos',neveras:'🧊 Neveras',turnos:'📋 Turnos',alertas:'⚠️ Alertas'}[t]
+      }</button>`).join('')}
+    </div>`;
+
+  let body = '';
+  if(TAB==='ingresos') body = tablaIngresos(ing);
+  if(TAB==='neveras')  body = tablaNeveras(nev, lav);
+  if(TAB==='turnos')   body = tablaTurnos(tur);
+  if(TAB==='alertas')  body = tablaAlertas(ale);
+
+  document.getElementById('sub').textContent = 'Datos del ' + (DATA.fecha||'') ;
+  document.getElementById('root').innerHTML = kpis + tabs + body;
+}
+function setTab(t){ TAB=t; render(); }
+
+function tablaIngresos(rows){
+  if(!rows.length) return `<div class="card"><div class="empty">Sin ingresos registrados este día.</div></div>`;
+  const tr = rows.map(x=>`<tr>
+    <td>${esc(x.Nombre)}</td>
+    <td>${esc(x.Placa)}</td>
+    <td>${esc(horaDe(x.FechaHora))}</td>
+    <td>${badgeEstado(x.Estado)}${x.Estado==='TARDE'&&x.MinDiferencia!==''?` <small>${esc(x.MinDiferencia)}m</small>`:''}</td>
+    <td class="dir">${esc(x.Direccion)}</td>
+    ${fotoCell(x.FotoURL)}
+  </tr>`).join('');
+  return `<div class="card"><h3>Marcaciones de ingreso</h3><table>
+    <thead><tr><th>Mensajero</th><th>Placa</th><th>Hora</th><th>Estado</th><th>Dirección</th><th>Evidencia</th></tr></thead>
+    <tbody>${tr}</tbody></table></div>`;
+}
+
+function tablaNeveras(nev, lav){
+  const estado = !nev.length ? `<div class="empty">No hay neveras en el Maestro de Activos.</div>` :
+    `<table><thead><tr><th>Nevera</th><th>Último alcohol</th><th>Último exhaustivo</th><th>Días sin exhaustivo</th><th>Estado</th></tr></thead>
+     <tbody>${nev.map(n=>`<tr>
+        <td><b>${esc(n.id)}</b></td>
+        <td>${esc(n.ultimoAlcohol||'—')}</td>
+        <td>${esc(n.ultimoExhaustivo||'—')}</td>
+        <td>${n.diasSinExhaustivo===''?'—':esc(n.diasSinExhaustivo)}</td>
+        <td>${n.exhaustivoVencido?'<span class="badge b-bad">Exhaustivo vencido</span>':'<span class="badge b-ok">Al día</span>'}</td>
+     </tr>`).join('')}</tbody></table>`;
+  const hoyLav = !lav.length ? `<div class="empty">Sin lavados registrados este día.</div>` :
+    `<table><thead><tr><th>Nevera</th><th>Mensajero</th><th>Tipo</th><th>Hora</th><th>Evidencia</th></tr></thead>
+     <tbody>${lav.map(x=>`<tr>
+        <td><b>${esc(x.NeveraID)}</b></td>
+        <td>${esc(x.Nombre)}</td>
+        <td>${x.TipoLavado==='exhaustivo'?'<span class="badge b-warn">Exhaustivo</span>':'<span class="badge b-mut">Alcohol</span>'}</td>
+        <td>${esc(horaDe(x.FechaHora))}</td>
+        ${fotoCell(x.FotoURL)}
+     </tr>`).join('')}</tbody></table>`;
+  return `<div class="card"><h3>Estado por nevera (alcohol diario · exhaustivo cada 8 días)</h3>${estado}</div>
+          <div class="card"><h3>Lavados del día</h3>${hoyLav}</div>`;
+}
+
+function tablaTurnos(rows){
+  if(!rows.length) return `<div class="card"><div class="empty">Sin turnos registrados este día. (Usa "Sembrar turnos pendientes" en el Sheet para verlos desde temprano.)</div></div>`;
+  const tr = rows.map(x=>`<tr>
+    <td>${esc(x.Nombre)}</td>
+    <td>${esc(x.Turno)}</td>
+    <td>${esc(x.HoraIngreso||'—')}</td>
+    <td>${esc(x.HoraSalida||'—')}</td>
+    <td>${badgeEstado(x.Resultado)}</td>
+  </tr>`).join('');
+  return `<div class="card"><h3>Estado de turnos</h3><table>
+    <thead><tr><th>Mensajero</th><th>Turno</th><th>Ingreso</th><th>Salida</th><th>Resultado</th></tr></thead>
+    <tbody>${tr}</tbody></table></div>`;
+}
+
+function tablaAlertas(rows){
+  if(!rows.length) return `<div class="card"><div class="empty">Sin alertas este día. 🎉</div></div>`;
+  const tr = rows.map(x=>`<tr>
+    <td>${esc(horaDe(x.FechaHora))}</td>
+    <td>${esc(x.Nombre)}</td>
+    <td><span class="badge b-bad">${esc(x.Tipo)}</span></td>
+    <td class="dir">${esc(x.Detalle)}</td>
+    <td>${esc(x.Estado)}</td>
+  </tr>`).join('');
+  return `<div class="card"><h3>Novedades / alertas</h3><table>
+    <thead><tr><th>Hora</th><th>Mensajero</th><th>Tipo</th><th>Detalle</th><th>Estado</th></tr></thead>
+    <tbody>${tr}</tbody></table></div>`;
+}
+</script>
